@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Configuration
@@ -43,13 +44,16 @@ public class EmpDetaillsProducer
     @Autowired
     private EmpDetailsRepository empDetailsRepository;
     
-    String topic = "library-events";
+    String topic = "employee-details";
     
     @Autowired
     ObjectMapper objectMapper;
     
+    @Autowired
+	 EmpDetailsJdbcRepository empDetailsJdbcRepository;
     
-    public int onFailure=0,onSuccess=0;
+    public int onFailure=0,onSuccess=0, test=0;
+    public static AtomicInteger at = new AtomicInteger(0);
 
 
 	private static final Logger logger= LogManager.getLogger(EmpDetaillsProducer.class);
@@ -83,17 +87,171 @@ public class EmpDetaillsProducer
 	    	emp5.setEmpID(5);
 	    	emp5.setEmpName("Ramkumar");
 	    	emp5.setEmpDepartment("Computer");
-	    	    	
+	    	
+	    		    	
+	    	EmployeeAttribute emp6=new EmployeeAttribute();
+	    	emp6.setEmpID(6);
+	    	emp6.setEmpName("Santhosh");
+	    	emp6.setEmpDepartment("Electrical");
+	    	
+	    	
+	    	EmployeeAttribute emp7=new EmployeeAttribute();
+	    	emp7.setEmpID(7);
+	    	emp7.setEmpName("Kumar");
+	    	emp7.setEmpDepartment("Production");
+	    	
+	    	
+	    	EmployeeAttribute emp8=new EmployeeAttribute();
+	    	emp8.setEmpID(8);
+	    	emp8.setEmpName("Sachin");
+	    	emp8.setEmpDepartment("IT");
+	    	
+	    	
+	    	EmployeeAttribute emp9=new EmployeeAttribute();
+	    	emp9.setEmpID(9);
+	    	emp9.setEmpName("Karthik");
+	    	emp9.setEmpDepartment("Computer");
+	    	
+	    	
+	    	EmployeeAttribute emp10=new EmployeeAttribute();
+	    	emp10.setEmpID(10);
+	    	emp10.setEmpName("Santhosh");
+	    	emp10.setEmpDepartment("Electrical");
+	    	
 	    	empattributeList.add(emp1);
 	    	empattributeList.add(emp2);
 	    	empattributeList.add(emp3);
 	    	empattributeList.add(emp4);
-	    	empattributeList.add(emp5);	    	
+	    	empattributeList.add(emp5);	    
+	    	empattributeList.add(emp6);
+	    	empattributeList.add(emp7);	
+	    	empattributeList.add(emp8);	
+	    	empattributeList.add(emp9);	
+	    	empattributeList.add(emp10);		    	
 	    	
 	    }
 	    
+	  	    
+	    @Scheduled(cron="0 17 23 * * MON-FRI") 
+	    public void  sendEmpDetailsEventAsynchronous() throws JsonProcessingException
+	    {
+	    	test=empattributeList.size();
+	    	
+	    	 logger.info("empattributeList.size:"+ empattributeList.size());
+	    	 	
 
-	 @Scheduled(cron="0 40 15 * * MON-FRI")
+	    	 for(EmployeeAttribute emp : empattributeList)
+	 	    {
+	    	
+	 	    	
+	 	    	EmployeeAttribute employeeAttribute=new EmployeeAttribute();
+	 	    	employeeAttribute.setEmpID(emp.getEmpID());
+	 	    	employeeAttribute.setEmpName(emp.getEmpName());
+	 	    	employeeAttribute.setEmpDepartment(emp.getEmpDepartment());
+	 	    
+		        Integer key = employeeAttribute.getEmpID();
+		        String value = objectMapper.writeValueAsString(employeeAttribute);
+	    	
+		    
+		        ProducerRecord<Integer,String> producerRecord = buildProducerRecord(key, value, topic);
+
+		        ListenableFuture<SendResult<Integer,String>> listenableFuture =  kafkaTemplate.send(producerRecord);
+
+		        listenableFuture.addCallback(new ListenableFutureCallback<SendResult<Integer, String>>()
+		        {
+	            @Override
+	            public void onFailure(Throwable ex) 
+	            {
+	            	
+	                try 
+	                {
+	                
+	                     EmployeeAttribute libraryEvent1 = objectMapper.readValue(value, EmployeeAttribute.class);
+	                	
+	        			
+	                     EmployeeAttribute empAtr=new EmployeeAttribute();
+	                     empAtr.setEmpID(employeeAttribute.getEmpID());
+	                     empAtr.setEmpName(employeeAttribute.getEmpName());
+	                     empAtr.setEmpDepartment(employeeAttribute.getEmpDepartment());
+	        			
+	                     empDetailsRepository.save(empAtr);
+	                	 onFailure++;
+	                	
+	                     logger.info("onFailure--------->:"+onFailure);
+	                  
+	        		     logger.info("Successfully Persisted the libary Event {} ", libraryEvent1);
+	        		     logger.error("Exception Sending the Message and the exception is {}", ex.getMessage());
+						
+						
+					} catch (JsonMappingException e)
+	                {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (JsonProcessingException e)
+	                {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+
+	                handleFailure(key, value, ex);
+	            }
+
+	            @Override
+	            public void onSuccess(SendResult<Integer, String> result) 
+	            {
+	            	 onSuccess++;
+                                      
+	            	 onSuccessMail(onSuccess,test);
+	                handleSuccess(key, value, result);
+	            }
+	            
+	        });
+	 	    }
+	     
+	    	 
+	    }	    
+	    
+	    
+	    
+	    
+	    
+	    private void handleFailure(Integer key, String value, Throwable ex) {
+	    	
+	    	logger.error("Error Sending the Message and the exception is {}", ex.getMessage());
+	    	
+	    	//logger.info("--------------------------------");
+	    	//logger.info("key :"+key);
+	    	
+	    	//logger.info("value" +value.toString());
+
+	    	
+	    	//value{"libraryEventId":305,"libraryEventType":"NEW","book":{"bookId":456,"bookName":"Kafka Using Spring Boot","bookAuthor":"teststt"}}
+	    	
+	      	//logger.info("--------------------------------");
+
+	        try {
+	            throw ex;
+	        } catch (Throwable throwable) {
+	        	logger.error("Error in OnFailure: {}", throwable.getMessage());
+	        	
+	        	
+	        	
+	        }
+
+
+	    }
+
+	    private void handleSuccess(Integer key, String value, SendResult<Integer, String> result) {
+	    	logger.info("Message Sent SuccessFully for the key : {} and the value is {} , partition is {}", key, value, result.getRecordMetadata().partition());
+	    }
+	    
+	    
+	    private ProducerRecord<Integer, String> buildProducerRecord(Integer key, String value, String topic)
+	    {
+	     	return new ProducerRecord<>(topic, null, key, value, null);
+	     }
+	
+	// @Scheduled(cron="0 40 15 * * MON-FRI")
     public void sendEmpDetailsEventSynchronous() throws JsonProcessingException, ExecutionException, InterruptedException, TimeoutException
     {
     	
@@ -144,5 +302,28 @@ public class EmpDetaillsProducer
  	    }
 
     }
+    
+    public void onSuccessMail(int onSuccess, int test)
+    {   	
+    	
+    	if (onSuccess==test)
+    	logger.info("Number of messages are processed for today is "+onSuccess);
+    	
+    	
+    }
+    
+    public void onFailureMail()
+    {   	
+    	
+    	List<EmployeeAttribute> employeeAttributeList=empDetailsJdbcRepository.findAll();
+    	int test1=employeeAttributeList.size();
+    	
+    	
+    	 logger.info(test1+ "messages are failed to publish");
+    	
+    	
+    }
+    
+    
 
 }
