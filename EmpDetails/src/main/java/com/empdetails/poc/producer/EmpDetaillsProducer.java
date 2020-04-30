@@ -51,10 +51,11 @@ public class EmpDetaillsProducer
     
     @Autowired
 	 EmpDetailsJdbcRepository empDetailsJdbcRepository;
-    
-    public int onFailure=0,onSuccess=0, test=0;
-    public static AtomicInteger at = new AtomicInteger(0);
 
+    public static AtomicInteger counter = new AtomicInteger(0);
+    public static AtomicInteger onFailure = new AtomicInteger(0);
+    public static AtomicInteger onSuccess = new AtomicInteger(0);
+    public int listSize=0;
 
 	private static final Logger logger= LogManager.getLogger(EmpDetaillsProducer.class);
 	
@@ -132,18 +133,20 @@ public class EmpDetaillsProducer
 	    }
 	    
 	  	    
-	    @Scheduled(cron="0 17 23 * * MON-FRI") 
+	    @Scheduled(cron="0 0/2 1-23 * * MON-FRI") 
 	    public void  sendEmpDetailsEventAsynchronous() throws JsonProcessingException
 	    {
-	    	test=empattributeList.size();
+	    	counter.set(0);
+	    	onSuccess.set(0);
+	    	onFailure.set(0);
+	    	listSize=0;
+	    	listSize=empattributeList.size();
 	    	
 	    	 logger.info("empattributeList.size:"+ empattributeList.size());
 	    	 	
-
-	    	 for(EmployeeAttribute emp : empattributeList)
+	       	 for(EmployeeAttribute emp : empattributeList)
 	 	    {
 	    	
-	 	    	
 	 	    	EmployeeAttribute employeeAttribute=new EmployeeAttribute();
 	 	    	employeeAttribute.setEmpID(emp.getEmpID());
 	 	    	employeeAttribute.setEmpName(emp.getEmpName());
@@ -152,6 +155,18 @@ public class EmpDetaillsProducer
 		        Integer key = employeeAttribute.getEmpID();
 		        String value = objectMapper.writeValueAsString(employeeAttribute);
 	    	
+		        try
+		        {
+		        	if (key==5)
+		        	{
+		        
+		            Thread.sleep(30000);
+		        	}
+		        }
+		        catch(InterruptedException ex)
+		        {
+		            Thread.currentThread().interrupt();
+		        }
 		    
 		        ProducerRecord<Integer,String> producerRecord = buildProducerRecord(key, value, topic);
 
@@ -173,11 +188,16 @@ public class EmpDetaillsProducer
 	                     empAtr.setEmpID(employeeAttribute.getEmpID());
 	                     empAtr.setEmpName(employeeAttribute.getEmpName());
 	                     empAtr.setEmpDepartment(employeeAttribute.getEmpDepartment());
-	        			
+	                    
+	                   
 	                     empDetailsRepository.save(empAtr);
-	                	 onFailure++;
-	                	
-	                     logger.info("onFailure--------->:"+onFailure);
+	                	 onFailure.getAndIncrement();
+	                		               	 
+	                	 counter.getAndIncrement();
+		            	
+		            	onSuccessMail(counter);
+		            	
+	                  //  logger.info("onFailure--------->:"+onFailure);
 	                  
 	        		     logger.info("Successfully Persisted the libary Event {} ", libraryEvent1);
 	        		     logger.error("Exception Sending the Message and the exception is {}", ex.getMessage());
@@ -199,16 +219,17 @@ public class EmpDetaillsProducer
 	            @Override
 	            public void onSuccess(SendResult<Integer, String> result) 
 	            {
-	            	 onSuccess++;
-                                      
-	            	 onSuccessMail(onSuccess,test);
+	            	 onSuccess.getAndIncrement();
+	            	 counter.getAndIncrement();
+	            	
+	            	onSuccessMail(counter);
 	                handleSuccess(key, value, result);
 	            }
 	            
 	        });
 	 	    }
 	     
-	    	 
+ 
 	    }	    
 	    
 	    
@@ -281,8 +302,8 @@ public class EmpDetaillsProducer
 	        {
         	       	
         	
-        	 onFailure++;
-             logger.info("onFailure--------->:"+onFailure);
+        	 //onFailure++;
+            // logger.info("onFailure--------->:"+onFailure);
              EmployeeAttribute libraryEvent1 = objectMapper.readValue(value, EmployeeAttribute.class);
         	
 			
@@ -303,27 +324,19 @@ public class EmpDetaillsProducer
 
     }
     
-    public void onSuccessMail(int onSuccess, int test)
+    public void onSuccessMail(AtomicInteger a)
     {   	
+    	logger.info("onSuccess :"+onSuccess.intValue());
+    	logger.info("onFailure :"+onFailure.intValue());
     	
-    	if (onSuccess==test)
-    	logger.info("Number of messages are processed for today is "+onSuccess);
-    	
+    	if (a.intValue()==listSize)
+    	{
+	    	logger.info("Number of messages are successfully processed for today is "+onSuccess.intValue());
+	    	logger.info("Number of messages are failed to process for today is "+ onFailure.intValue());
+    	}    	
     	
     }
-    
-    public void onFailureMail()
-    {   	
-    	
-    	List<EmployeeAttribute> employeeAttributeList=empDetailsJdbcRepository.findAll();
-    	int test1=employeeAttributeList.size();
-    	
-    	
-    	 logger.info(test1+ "messages are failed to publish");
-    	
-    	
-    }
-    
+      
     
 
 }
