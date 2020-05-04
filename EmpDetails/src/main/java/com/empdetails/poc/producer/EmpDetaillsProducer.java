@@ -133,7 +133,7 @@ public class EmpDetaillsProducer
 	    }
 	    
 	  	    
-	    @Scheduled(cron="0 0/2 1-23 * * MON-FRI") 
+	   // @Scheduled(cron="0 0/2 1-23 * * MON-FRI") 
 	    public void  sendEmpDetailsEventAsynchronous() throws JsonProcessingException
 	    {
 	    	counter.set(0);
